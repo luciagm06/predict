@@ -5,6 +5,7 @@ const express = require("express");
 const path = require("path");
 const predictRoutes = require("./routes/predictRoutes");
 const { initModel } = require("./services/tfModelService");
+const connectMongo = require("./mongo");
 
 const PORT = process.env.PORT || 3002;
 
@@ -18,6 +19,7 @@ app.use("/model", express.static(modelDir));
 // Rutas del servicio PREDICT
 app.use("/", predictRoutes);
 
+connectMongo();
 // Arranque del servidor + carga del modelo
 app.listen(PORT, async () => {
   const serverUrl = `http://localhost:${PORT}`;
