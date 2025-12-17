@@ -67,6 +67,8 @@ async function doPredict(req, res) {
     const prediction = await predict(features);
     const latencyMs = Date.now() - start;
 
+    console.log('[PREDICT] Intentando guardar en MongoDB...');
+
     const saved = await Prediction.create({
       dataId,
       features,
@@ -77,6 +79,8 @@ async function doPredict(req, res) {
       latencyMs
     });
 
+    console.log('[PREDICT] Guardado exitoso! ID:', saved._id);
+
     res.status(201).json({
       predictionId: saved._id,
       prediction,
@@ -85,8 +89,12 @@ async function doPredict(req, res) {
     });
 
   } catch (err) {
-    console.error("Error en /predict:", err);
-    res.status(500).json({ error: "Internal error" });
+    console.error("[PREDICT] Error en /predict:", err.message);
+    console.error("[PREDICT] Stack:", err.stack);
+    res.status(500).json({ 
+      error: "Internal error", 
+      message: err.message 
+    });
   }
 }
 

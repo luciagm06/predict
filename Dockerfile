@@ -1,12 +1,13 @@
-FROM node:18
+FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY predict/package*.json ./
+
 RUN npm install
 
-COPY . .
+COPY predict/ ./
 
 EXPOSE 3002
 
-CMD ["node", "server_all.js"]
+CMD ["node", "server.js"]
