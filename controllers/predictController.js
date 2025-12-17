@@ -1,6 +1,9 @@
-// controllers/predictController.js
+'use strict';
+
 const { getModelInfo, predict } = require("../services/tfModelService");
 const Prediction = require("../models/prediction");
+
+const MODEL_VERSION = process.env.MODEL_VERSION || "unknown";
 
 function health(req, res) {
   res.json({
@@ -61,25 +64,23 @@ async function doPredict(req, res) {
       });
     }
 
-    // 🔮 Predicción
     const prediction = await predict(features);
     const latencyMs = Date.now() - start;
 
-    // 💾 Persistencia en MongoDB (timestamp lo genera Mongo)
     const saved = await Prediction.create({
       dataId,
       features,
       prediction,
       source,
       correlationId,
-      modelVersion: info.modelVersion,
+      modelVersion: MODEL_VERSION,
       latencyMs
     });
 
     res.status(201).json({
       predictionId: saved._id,
       prediction,
-      timestamp: saved.createdAt, // 👈 viene de Mongo
+      timestamp: saved.createdAt,
       latencyMs
     });
 
