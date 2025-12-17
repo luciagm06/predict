@@ -1,5 +1,6 @@
 // controllers/predictController.js
 const { getModelInfo, predict } = require("../services/tfModelService");
+const Prediction = require("../models/prediction");
 
 function health(req, res) {
   res.json({
@@ -46,7 +47,7 @@ async function doPredict(req, res) {
       return res.status(400).json({ error: "Missing meta object" });
     }
 
-    const { featureCount } = meta;
+    const { featureCount, dataId, source, correlationId } = meta;
 
     if (featureCount !== info.inputDim) {
       return res.status(400).json({
@@ -60,17 +61,28 @@ async function doPredict(req, res) {
       });
     }
 
+    // 🔮 Predicción
     const prediction = await predict(features);
     const latencyMs = Date.now() - start;
-    const timestamp = new Date().toISOString();
 
-    // De momento sin MongoDB → predictionId null
-    res.status(201).json({
-      predictionId: null,
+    // 💾 Persistencia en MongoDB (timestamp lo genera Mongo)
+    const saved = await Prediction.create({
+      dataId,
+      features,
       prediction,
-      timestamp,
+      source,
+      correlationId,
+      modelVersion: info.modelVersion,
       latencyMs
     });
+
+    res.status(201).json({
+      predictionId: saved._id,
+      prediction,
+      timestamp: saved.createdAt, // 👈 viene de Mongo
+      latencyMs
+    });
+
   } catch (err) {
     console.error("Error en /predict:", err);
     res.status(500).json({ error: "Internal error" });

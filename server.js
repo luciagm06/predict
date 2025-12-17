@@ -20,6 +20,7 @@ app.use("/model", express.static(modelDir));
 app.use("/", predictRoutes);
 
 connectMongo();
+
 // Arranque del servidor + carga del modelo
 app.listen(PORT, async () => {
   const serverUrl = `http://localhost:${PORT}`;
