@@ -1,99 +1,85 @@
 'use strict';
 
-const { getModelInfo, predict } = require("../services/tfModelService");
-const Prediction = require("../models/prediction");
-
-const MODEL_VERSION = process.env.MODEL_VERSION || "unknown";
+const { predict, getModelInfo } = require('../services/tfModelService');
+const Prediction = require('../models/prediction');
 
 function health(req, res) {
-  res.json({
-    status: "ok",
-    service: "predict"
-  });
+  res.json({ status: 'ok', service: 'predict' });
 }
 
 function ready(req, res) {
   const info = getModelInfo();
-
-  if (!info.ready) {
-    return res.status(503).json({
-      ready: false,
-      modelVersion: info.modelVersion,
-      message: "Model is still loading"
-    });
-  }
-
-  res.json({
-    ready: true,
-    modelVersion: info.modelVersion
-  });
+  res.json(info);
 }
 
 async function doPredict(req, res) {
   const start = Date.now();
+  const { features, meta } = req.body;
 
   try {
     const info = getModelInfo();
     if (!info.ready) {
       return res.status(503).json({
-        error: "Model not ready",
-        ready: false
+        error: 'Service unavailable',
+        message: 'Model not ready yet'
       });
     }
 
-    const { features, meta } = req.body;
-
-    if (!features) {
-      return res.status(400).json({ error: "Missing features" });
-    }
-    if (!meta || typeof meta !== "object") {
-      return res.status(400).json({ error: "Missing meta object" });
-    }
-
-    const { featureCount, dataId, source, correlationId } = meta;
-
-    if (featureCount !== info.inputDim) {
+    if (!features || !Array.isArray(features)) {
       return res.status(400).json({
-        error: `featureCount must be ${info.inputDim}, received ${featureCount}`
+        error: 'Bad request',
+        message: 'features must be an array'
       });
     }
 
-    if (!Array.isArray(features) || features.length !== info.inputDim) {
+    if (features.length !== 7) {
       return res.status(400).json({
-        error: `features must be an array of ${info.inputDim} numbers`
+        error: 'Bad request',
+        message: `Expected 7 features, got ${features.length}`
       });
     }
 
-    const prediction = await predict(features);
-    const latencyMs = Date.now() - start;
+    if (!meta) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: 'meta is required'
+      });
+    }
 
-    console.log('[PREDICT] Intentando guardar en MongoDB...');
+    if (!meta.target_date || !meta.time_start || !meta.time_end) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: 'meta must contain target_date, time_start, and time_end'
+      });
+    }
+
+    console.log('[PREDICT] Validaciones OK');
+    console.log('[PREDICT] features:', features);
+    console.log('[PREDICT] target_date:', meta.target_date);
+
+    const predictionValue = await predict(features);
 
     const saved = await Prediction.create({
-      dataId,
-      features,
-      prediction,
-      source,
-      correlationId,
-      modelVersion: MODEL_VERSION,
-      latencyMs
+      prediction_value: predictionValue,
+      features: features,
+      timestamp: new Date(),
+      target_date: new Date(meta.target_date),
+      time_start: new Date(meta.time_start),
+      time_end: new Date(meta.time_end)
     });
-
-    console.log('[PREDICT] Guardado exitoso! ID:', saved._id);
 
     res.status(201).json({
       predictionId: saved._id,
-      prediction,
-      timestamp: saved.createdAt,
-      latencyMs
+      prediction: saved.prediction_value,
+      timestamp: saved.timestamp,
+      latencyMs: Date.now() - start
     });
 
   } catch (err) {
-    console.error("[PREDICT] Error en /predict:", err.message);
-    console.error("[PREDICT] Stack:", err.stack);
-    res.status(500).json({ 
-      error: "Internal error", 
-      message: err.message 
+    console.error('[PREDICT] Error:', err.message);
+    res.status(500).json({
+      error: 'Prediction failed',
+      message: err.message
     });
   }
 }
